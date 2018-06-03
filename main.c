@@ -17,17 +17,31 @@
 #include "ch.h"
 #include "hal.h"
 #include "test.h"
+#define PWM_FREQUENCY_KHZ 200000
+#define PWM_MAX 100
 
-/*
- * LED blinker thread, times are in milliseconds.
- */
+static PWMConfig pwm_config_tim3 = {
+    PWM_FREQUENCY_KHZ * PWM_MAX,
+    PWM_MAX,
+    NULL,
+    {
+        {PWM_OUTPUT_ACTIVE_HIGH, NULL},
+        {PWM_OUTPUT_DISABLED, NULL},
+        {PWM_OUTPUT_DISABLED, NULL},
+        {PWM_OUTPUT_DISABLED, NULL}
+    },
+    0,
+    0
+};
+
 static THD_WORKING_AREA(waThread1, 128);
 static THD_FUNCTION(Thread1, arg) {
 
   (void)arg;
-  chRegSetThreadName("blinker");
+  uint8_t data;
+  chRegSetThreadName("lidar");
   while (true) {
-    chThdSleepMilliseconds(500);
+      data = sdGet(&SD2);
   }
 }
 
@@ -46,11 +60,14 @@ int main(void) {
   halInit();
   chSysInit();
   palClearPad(GPIOA, GPIOA_LED_GREEN);
+  palSetPad(GPIOB, GPIOB_PHA);
 
   /*
    * Activates the serial driver 2 using the driver default configuration.
    */
   sdStart(&SD2, NULL);
+  pwmStart(&PWMD3, &pwm_config_tim3);
+  pwmEnableChannel(&PWMD3, 0, 25);
 
   /*
    * Creates the blinker thread.

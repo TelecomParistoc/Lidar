@@ -45,12 +45,12 @@
 #define STM32_SW                            STM32_SW_PLL
 #define STM32_PLLSRC                        STM32_PLLSRC_HSI
 #define STM32_PLLM_VALUE                    16
-#define STM32_PLLN_VALUE                    336     
-#define STM32_PLLP_VALUE                    4       
-#define STM32_PLLQ_VALUE                    7       
-#define STM32_HPRE                          STM32_HPRE_DIV1  
-#define STM32_PPRE1                         STM32_PPRE1_DIV2  
-#define STM32_PPRE2                         STM32_PPRE2_DIV1 
+#define STM32_PLLN_VALUE                    336
+#define STM32_PLLP_VALUE                    4
+#define STM32_PLLQ_VALUE                    7
+#define STM32_HPRE                          STM32_HPRE_DIV1
+#define STM32_PPRE1                         STM32_PPRE1_DIV2
+#define STM32_PPRE2                         STM32_PPRE2_DIV1
 #define STM32_RTCSEL                        STM32_RTCSEL_LSI
 #define STM32_RTCPRE_VALUE                  8
 #define STM32_MCO1SEL                       STM32_MCO1SEL_HSI
@@ -67,7 +67,7 @@
 /*
  * ADC driver system settings.
  */
-#define STM32_ADC_ADCPRE                    ADC_CCR_ADCPRE_DIV4   
+#define STM32_ADC_ADCPRE                    ADC_CCR_ADCPRE_DIV4
 #define STM32_ADC_USE_ADC1                  FALSE
 #define STM32_ADC_ADC1_DMA_STREAM           STM32_DMA_STREAM_ID(2, 4)
 #define STM32_ADC_ADC1_DMA_PRIORITY         2
@@ -166,7 +166,7 @@
 #define STM32_PWM_USE_ADVANCED              FALSE
 #define STM32_PWM_USE_TIM1                  FALSE
 #define STM32_PWM_USE_TIM2                  FALSE
-#define STM32_PWM_USE_TIM3                  FALSE
+#define STM32_PWM_USE_TIM3                  TRUE
 #define STM32_PWM_USE_TIM4                  FALSE
 #define STM32_PWM_USE_TIM5                  FALSE
 #define STM32_PWM_USE_TIM9                  FALSE
