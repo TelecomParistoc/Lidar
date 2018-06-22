@@ -217,3 +217,6 @@ include $(RULESPATH)/rules.mk
 
 gdb:
 	$(TRGT)gdb build/$(PROJECT).elf
+
+openocd:
+	openocd -f board/st_nucleo_f4.cfg
