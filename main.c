@@ -42,13 +42,55 @@ static msg_t free_packets_msg[MAX_PENDING_PACKETS];
 static msg_t packets_msg[MAX_PENDING_PACKETS];
 MAILBOX_DECL(free_packets_mb, &free_packets_msg, MAX_PENDING_PACKETS);
 MAILBOX_DECL(packets_mb, &packets_msg, MAX_PENDING_PACKETS);
+
+/*
+ * @brief Parse the raw data received into a C structure.
+ *
+ * @param[in] raw_data The binary data received from Lidar
+ * @param[out] data Pointer to the C structure to fill
+ */
+void xv11_parse_data(uint8_t raw_data[4], xv11_data_t *data) {
+  memset(data, 0, sizeof(xv11_data_t));
+
+  if (raw_data[1] & XV11_INVALID_DATA)
+  data->invalid_data = true;
+
+  if (raw_data[1] & XV11_STRENGTH_WARNING)
+  data->strength_warning = true;
+
+  data->distance = raw_data[0] + ((raw_data[1] & XV11_DISTANCE_MASK) << 8);
+  data->signal_strength = raw_data[3] + (raw_data[4] << 8);
+}
+
+/*
+ * @brief Compute the checksum of the packet.
+ *
+ * @param[in] packet Pointer to the packet to work on
+ *
+ * @return The computed checksum
+ */
+uint16_t compute_checksum(xv11_packet_t *packet) {
+  uint32_t checksum = 0;
+  uint8_t *dataPtr = (uint8_t*)packet;
+  uint8_t index;
+
+  for (index = 0; index < 10; index++) {
+    checksum = (checksum << 1);
+    checksum += ((uint32_t)(dataPtr[2*index]) + (((uint32_t)(dataPtr[2*index+1])) << 8));
+  }
+
+  checksum = ((checksum & 0x7FFF) + (checksum >> 15)) & 0x7FFF;
+
+  return checksum;
+}
+
 static THD_WORKING_AREA(waThread1, 128);
 static THD_FUNCTION(Thread1, arg) {
-
   (void)arg;
 	uint8_t index;
 	xv11_packet_t *packet = NULL;
 	msg_t retCode;
+  uint8_t raw_data[4];
 
   chRegSetThreadName("lidar");
 
@@ -58,13 +100,28 @@ static THD_FUNCTION(Thread1, arg) {
 			retCode = chMBFetch(&free_packets_mb, (msg_t*)packet, TIME_IMMEDIATE);
 			if (retCode == MSG_OK) {
 				packet->index = sdGet(&SD2);
+        if ((packet->index < XV11_INDEX_MIN) || (packet->index > XV11_INDEX_MAX)) { // Invalid index
+          chMBPost(&free_packets_mb, (msg_t)packet, TIME_INFINITE);
+          continue; // don't waste time trying to read an invalid packet
+        }
+
 				packet->speed = sdGet(&SD2);
 				packet->speed |= sdGet(&SD2) << 8;
+
 				for (index = 0; index < 4; index++) {
-					sdRead(&SD2, packet->data[index], 4);
+					sdRead(&SD2, raw_data, 4);
+          xv11_parse_data(raw_data, &packet->data[index]);
 				}
+
 				packet->checksum = sdGet(&SD2);
 				packet->checksum |= sdGet(&SD2) << 8;
+
+        // Check packet integrity
+        if (packet->checksum != compute_checksum(packet)) {
+          chMBPost(&free_packets_mb, (msg_t)packet, TIME_INFINITE);
+          continue; // drop invalid packet
+        }
+
 				retCode = chMBPost(&packets_mb, (msg_t)packet, TIME_IMMEDIATE);
 				if (retCode != MSG_OK) { // Fail to post packet
 					memset(packet, 0, sizeof(xv11_packet_t));
@@ -78,40 +135,9 @@ static THD_FUNCTION(Thread1, arg) {
 
 slam_measure_t map[360];
 
-uint16_t compute_checksum(xv11_packet_t *packet) {
-	uint32_t checksum = 0;
-	uint8_t *dataPtr = (uint8_t*)packet;
-	uint8_t index;
-
-	for (index = 0; index < 10; index++) {
-		checksum = (checksum << 1);
-		checksum += ((uint32_t)(dataPtr[2*index]) + (((uint32_t)(dataPtr[2*index+1])) << 8));
-	}
-
-	checksum = ((checksum & 0x7FFF) + (checksum >> 15)) & 0x7FFF;
-
-	return checksum;
-}
-
-xv11_data_t xv11_parse_data(uint8_t raw_data[4]) {
-	xv11_data_t data = {0};
-
-	if (raw_data[1] & XV11_INVALID_DATA)
-		data.invalid_data = true;
-
-	if (raw_data[1] & XV11_STRENGTH_WARNING)
-		data.strength_warning = true;
-
-	data.distance = raw_data[0] + ((raw_data[1] & XV11_DISTANCE_MASK) << 8);
-	data.signal_strength = raw_data[3] + (raw_data[4] << 8);
-
-	return data;
-}
-
 static THD_WORKING_AREA(waThread2, 128);
 static THD_FUNCTION(Thread2, arg) {
 	xv11_packet_t *packet;
-	xv11_data_t data;
 	uint8_t dataIndex;
 	msg_t retCode;
 	bool mapComplete = false;
@@ -121,22 +147,10 @@ static THD_FUNCTION(Thread2, arg) {
 	while(true) {
 		retCode = chMBFetch(&packets_mb, (msg_t*)&packet, TIME_INFINITE);
 		if (retCode == MSG_OK) {
-			// Check packet validity
-			if ((packet->index < 0xA0) || (packet->index > 0xF9)) { // Invalid index
-				chMBPost(&free_packets_mb, (msg_t)packet, TIME_INFINITE);
-				continue;
-			}
-
-			if (compute_checksum(packet) != packet->checksum) { // Invalid checksum
-				chMBPost(&free_packets_mb, (msg_t)packet, TIME_INFINITE);
-				continue;
-			}
-
 			// Fill distance map
 			for (dataIndex = 0; dataIndex < 4; dataIndex++) {
-				data = xv11_parse_data(packet->data[dataIndex]);
-				if (!data.invalid_data && !data.strength_warning) {
-					map[(packet->index - XV11_INDEX_OFFSET) * 4 + dataIndex].distance = data.distance;
+				if (!packet->data[dataIndex].invalid_data && !packet->data[dataIndex].strength_warning) {
+					map[(packet->index - XV11_INDEX_OFFSET) * 4 + dataIndex].distance = packet->data[dataIndex].distance;
 					map[(packet->index - XV11_INDEX_OFFSET) * 4 + dataIndex].valid = true;
 				}
 			}

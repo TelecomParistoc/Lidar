@@ -6,6 +6,7 @@
 #define XV11_PACKET_LENGTH 22
 
 #define XV11_INDEX_OFFSET 0xA0
+#define XV11_INDEX_MIN 0xA0
 #define XV11_INDEX_MAX 0xF9
 
 #define XV11_INVALID_DATA 0x80
@@ -22,7 +23,7 @@ typedef struct {
 typedef struct {
 	uint8_t index;
 	uint16_t speed;
-	uint8_t data[4][4];
+	xv11_data_t data[4];
 	uint16_t checksum;
 } xv11_packet_t;
 
