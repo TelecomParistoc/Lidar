@@ -40,8 +40,9 @@ static SerialConfig uartCfg2 = {115200, 0, 0, 0};
 #define MAX_PENDING_PACKETS 10
 static msg_t free_packets_msg[MAX_PENDING_PACKETS];
 static msg_t packets_msg[MAX_PENDING_PACKETS];
-MAILBOX_DECL(free_packets_mb, &free_packets_msg, MAX_PENDING_PACKETS);
-MAILBOX_DECL(packets_mb, &packets_msg, MAX_PENDING_PACKETS);
+static xv11_packet_t buffers[MAX_PENDING_PACKETS];
+MAILBOX_DECL(free_packets_mb, free_packets_msg, MAX_PENDING_PACKETS);
+MAILBOX_DECL(packets_mb, packets_msg, MAX_PENDING_PACKETS);
 
 /*
  * @brief Parse the raw data received into a C structure.
@@ -88,8 +89,8 @@ static THD_WORKING_AREA(waThread1, 128);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
 	uint8_t index;
-	xv11_packet_t *packet = NULL;
-	msg_t retCode;
+	xv11_packet_t *packet;
+	msg_t retCode = MSG_OK;
   uint8_t raw_data[4];
 
   chRegSetThreadName("lidar");
@@ -97,9 +98,10 @@ static THD_FUNCTION(Thread1, arg) {
 	// Acquire data
   while (true) {
     if (sdGet(&SD2) == XV11_DATA_FRAME_START) { // New data frame
-			retCode = chMBFetch(&free_packets_mb, (msg_t*)packet, TIME_IMMEDIATE);
+      retCode = chMBFetch(&free_packets_mb, (msg_t*)&packet, TIME_IMMEDIATE);
 			if (retCode == MSG_OK) {
 				packet->index = sdGet(&SD2);
+
         if ((packet->index < XV11_INDEX_MIN) || (packet->index > XV11_INDEX_MAX)) { // Invalid index
           chMBPost(&free_packets_mb, (msg_t)packet, TIME_INFINITE);
           continue; // don't waste time trying to read an invalid packet
@@ -115,6 +117,16 @@ static THD_FUNCTION(Thread1, arg) {
 
 				packet->checksum = sdGet(&SD2);
 				packet->checksum |= sdGet(&SD2) << 8;
+
+        if((packet->index == XV11_INDEX_MIN) && !packet->data[0].invalid_data) {
+          palTogglePad(GPIOA, GPIOA_LED_GREEN);
+        }
+
+        if (!packet->data[0].invalid_data) {
+          sdPut(&SD2, packet->index - XV11_INDEX_OFFSET);
+          sdPut(&SD2, packet->data[0].distance & 0xFF);
+          sdPut(&SD2, (packet->data[0].distance & 0xFF00) >> 8);
+      }
 
         // Check packet integrity
         if (packet->checksum != compute_checksum(packet)) {
@@ -177,6 +189,7 @@ static THD_FUNCTION(Thread2, arg) {
  */
 int main(void) {
 
+  msg_t retCode;
   /*
    * System initializations.
    * - HAL initialization, this also initializes the configured device drivers
@@ -196,11 +209,19 @@ int main(void) {
   pwmStart(&PWMD3, &pwm_config_tim3);
   pwmEnableChannel(&PWMD3, 0, 90);
 
+  // Init free packet mailbox
+  for (int i = 0; i < MAX_PENDING_PACKETS; i++) {
+    retCode = chMBPost(&free_packets_mb, (msg_t)&buffers[i], TIME_INFINITE);
+    if (retCode != MSG_OK) {
+      palSetPad(GPIOA, GPIOA_LED_GREEN);
+    }
+  }
+
   chThdCreateStatic(waThread1, sizeof(waThread1), NORMALPRIO, Thread1, NULL);
 	chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO, Thread2, NULL);
 
   while (true) {
-    palTogglePad(GPIOA, GPIOA_LED_GREEN);
+  //  palTogglePad(GPIOA, GPIOA_LED_GREEN);
     chThdSleepMilliseconds(200);
   }
 }
