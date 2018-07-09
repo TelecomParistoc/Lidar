@@ -18,6 +18,7 @@
 #include "hal.h"
 #include "xv11.h"
 #include "slam.h"
+#include "log.h"
 #include <string.h>
 #define PWM_FREQUENCY_KHZ 200000
 #define PWM_MAX 100
@@ -80,13 +81,13 @@ uint16_t compute_checksum(xv11_packet_t *packet) {
   uint32_t checksum = 0;
   uint8_t *dataPtr = (uint8_t*)packet;
   uint8_t index;
-
   for (index = 0; index < 10; index++) {
     checksum = (checksum << 1);
     checksum += ((uint32_t)(dataPtr[2*index]) + (((uint32_t)(dataPtr[2*index+1])) << 8));
   }
 
-  checksum = ((checksum & 0x7FFF) + (checksum >> 15)) & 0x7FFF;
+  checksum = ((checksum & 0x7FFF) + (checksum >> 15));
+  checksum = checksum & 0x7FFF;
 
   return checksum;
 }
@@ -107,6 +108,7 @@ static THD_FUNCTION(Thread1, arg) {
     if (sdGet(&SD2) == XV11_DATA_FRAME_START) { // New data frame
       retCode = chMBFetch(&free_packets_mb, (msg_t*)&packet, TIME_IMMEDIATE);
 			if (retCode == MSG_OK) {
+        packet->start = XV11_DATA_FRAME_START;
 				packet->index = sdGet(&SD2);
 
         if ((packet->index < XV11_INDEX_MIN) || (packet->index > XV11_INDEX_MAX)) { // Invalid index
@@ -131,23 +133,22 @@ static THD_FUNCTION(Thread1, arg) {
 
 				packet->checksum = sdGet(&SD2);
 				packet->checksum |= sdGet(&SD2) << 8;
-
         if((packet->index == XV11_INDEX_MIN) && !packet->data[0].invalid_data) {
           palTogglePad(GPIOA, GPIOA_LED_GREEN);
         }
-
+#if 0
         if (!packet->data[0].invalid_data) {
-          sdPut(&SD2, packet->index - XV11_INDEX_OFFSET);
-          sdPut(&SD2, packet->data[0].distance & 0xFF);
-          sdPut(&SD2, (packet->data[0].distance & 0xFF00) >> 8);
+          print(packet->index - XV11_INDEX_OFFSET, packet->data[0].distance);
       }
+#endif
 
         // Check packet integrity
+#if 0 // Checkum computation invalid
         if (packet->checksum != compute_checksum(packet)) {
           chMBPost(&free_packets_mb, (msg_t)packet, TIME_INFINITE);
           continue; // drop invalid packet
         }
-
+#endif
 				retCode = chMBPost(&packets_mb, (msg_t)packet, TIME_IMMEDIATE);
 				if (retCode != MSG_OK) { // Fail to post packet
 					memset(packet, 0, sizeof(xv11_packet_t));
@@ -235,7 +236,7 @@ int main(void) {
 	chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO, Thread2, NULL);
 
   while (true) {
-  //  palTogglePad(GPIOA, GPIOA_LED_GREEN);
+    palTogglePad(GPIOA, GPIOA_LED_GREEN);
     chThdSleepMilliseconds(200);
   }
 }

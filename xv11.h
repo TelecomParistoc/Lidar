@@ -15,14 +15,15 @@
 
 #define XV11_TARGET_SPEED_RPM 300
 
-typedef struct {
+typedef struct __attribute__ ((__packed__)) {
 	uint16_t distance;
 	bool invalid_data;
 	bool strength_warning;
 	uint16_t signal_strength;
 } xv11_data_t;
 
-typedef struct {
+typedef struct __attribute__ ((__packed__)) {
+	uint8_t start;
 	uint8_t index;
 	uint16_t speed;
 	xv11_data_t data[4];
