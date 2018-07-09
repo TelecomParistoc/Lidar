@@ -13,6 +13,8 @@
 #define XV11_STRENGTH_WARNING 0x40
 #define XV11_DISTANCE_MASK 0x3F
 
+#define XV11_TARGET_SPEED_RPM 300
+
 typedef struct {
 	uint16_t distance;
 	bool invalid_data;

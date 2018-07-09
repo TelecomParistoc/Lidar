@@ -63,6 +63,12 @@ void xv11_parse_data(uint8_t raw_data[4], xv11_data_t *data) {
   data->signal_strength = raw_data[3] + (raw_data[4] << 8);
 }
 
+void xv11_set_speed(uint8_t speed) {
+    if (speed <= PWM_MAX) {
+      pwmEnableChannel(&PWMD3, 0, speed);
+    }
+}
+
 /*
  * @brief Compute the checksum of the packet.
  *
@@ -92,6 +98,7 @@ static THD_FUNCTION(Thread1, arg) {
 	xv11_packet_t *packet;
 	msg_t retCode = MSG_OK;
   uint8_t raw_data[4];
+  uint8_t speed = 80;
 
   chRegSetThreadName("lidar");
 
@@ -109,6 +116,13 @@ static THD_FUNCTION(Thread1, arg) {
 
 				packet->speed = sdGet(&SD2);
 				packet->speed |= sdGet(&SD2) << 8;
+        packet->speed = packet->speed >> 6;
+        if (packet->speed < XV11_TARGET_SPEED_RPM) {
+          speed++;
+        } else if (packet->speed > XV11_TARGET_SPEED_RPM) {
+          speed--;
+        }
+        xv11_set_speed(speed);
 
 				for (index = 0; index < 4; index++) {
 					sdRead(&SD2, raw_data, 4);
@@ -207,7 +221,7 @@ int main(void) {
    */
   sdStart(&SD2, &uartCfg2);
   pwmStart(&PWMD3, &pwm_config_tim3);
-  pwmEnableChannel(&PWMD3, 0, 90);
+  xv11_set_speed(80);
 
   // Init free packet mailbox
   for (int i = 0; i < MAX_PENDING_PACKETS; i++) {
