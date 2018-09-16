@@ -19,9 +19,12 @@
 #include "xv11.h"
 #include "slam.h"
 #include "log.h"
+#include "utils.h"
+#include "map.h"
 #include <string.h>
 #define PWM_FREQUENCY_KHZ 200000
 #define PWM_MAX 100
+#define PRINT_MAP 1
 
 static PWMConfig pwm_config_tim3 = {
     PWM_FREQUENCY_KHZ * PWM_MAX,
@@ -92,6 +95,38 @@ uint16_t compute_checksum(xv11_packet_t *packet) {
   return checksum;
 }
 
+void clean_data(slam_measure_t map[]) {
+  bool invalid_data = false;
+  int nextIndex;
+  int curIndex = 0;
+  int check_curIndex;
+  int check_nextIndex;
+
+  while (true) {
+    nextIndex = findNextValidIndex(map, curIndex);
+    if (ABS(map[nextIndex].distance - map[curIndex].distance) > DISCONTINUITY_THRESHOLD) {
+      check_nextIndex = nextIndex;
+      for (int j = 0; j < CONTINUITY_CHECK_WINDOW; j++) {
+        check_curIndex = check_nextIndex;
+        check_nextIndex = findNextValidIndex(map, check_curIndex);
+        if (ABS(map[check_curIndex].distance - map[check_nextIndex].distance) > DISCONTINUITY_THRESHOLD) {
+          invalid_data = true;
+          break;
+        }
+      }
+
+      if (invalid_data) {
+        map[curIndex].valid = false;
+      }
+    }
+
+    if (curIndex < nextIndex)
+      curIndex = nextIndex;
+    else
+      break;
+  }
+}
+
 static THD_WORKING_AREA(waThread1, 128);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;
@@ -136,11 +171,6 @@ static THD_FUNCTION(Thread1, arg) {
         if((packet->index == XV11_INDEX_MIN) && !packet->data[0].invalid_data) {
           palTogglePad(GPIOA, GPIOA_LED_GREEN);
         }
-#if 0
-        if (!packet->data[0].invalid_data) {
-          print(packet->index - XV11_INDEX_OFFSET, packet->data[0].distance);
-      }
-#endif
 
         // Check packet integrity
 #if 0 // Checkum computation invalid
@@ -160,14 +190,16 @@ static THD_FUNCTION(Thread1, arg) {
   }
 }
 
-slam_measure_t map[360];
+slam_measure_t map[MAP_SIZE];
 
 static THD_WORKING_AREA(waThread2, 128);
 static THD_FUNCTION(Thread2, arg) {
 	xv11_packet_t *packet;
 	uint8_t dataIndex;
 	msg_t retCode;
+  static int prevIndex = 0;
 	bool mapComplete = false;
+  bool mapValid = false;
 
   (void)arg; // unused
 
@@ -182,19 +214,41 @@ static THD_FUNCTION(Thread2, arg) {
 				}
 			}
 
-			if (packet->index == XV11_INDEX_MAX) {
-				mapComplete = true;
-			}
-
+      if (prevIndex > packet->index) {
+        mapComplete = true;
+        int idx, cnt = 0;
+        for (idx = 0; idx < 360; idx++) {
+          if (map[idx].valid)
+            cnt++;
+        }
+      //  swd_printf("valid data: %d\n", cnt);
+        if (cnt > MIN_VALID_DATA_NB)
+          mapValid = true;
+      }
+      prevIndex = packet->index;
 			// Clear packet and send it back to "free" pool
 			memset(packet, 0, sizeof(xv11_packet_t));
 			chMBPost(&free_packets_mb, (msg_t)packet, TIME_INFINITE);
 		}
 
 		// Run analysis on full map
-		if (mapComplete) {
-			mapComplete = false;
-			// TODO: extract connex components
+		if (mapComplete && mapValid) {
+      clean_data(map);
+
+#if PRINT_MAP
+      // Print map
+      int curIndex = findNextValidIndex(map, MAP_SIZE - 1); // Find first valid index
+      int nextIndex = findNextValidIndex(map, curIndex);
+      while (curIndex < nextIndex) {
+        swd_printf("%d %d\n", curIndex, map[curIndex].distance);
+        curIndex = nextIndex;
+        nextIndex =findNextValidIndex(map, curIndex);
+      }
+#endif
+      // TODO: extract connex components
+      mapComplete = false;
+      mapValid = false;
+      memset(map, 0, sizeof(map));
 		}
 	}
 }
@@ -236,7 +290,7 @@ int main(void) {
 	chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO, Thread2, NULL);
 
   while (true) {
-    palTogglePad(GPIOA, GPIOA_LED_GREEN);
+  //  palTogglePad(GPIOA, GPIOA_LED_GREEN);
     chThdSleepMilliseconds(200);
   }
 }
