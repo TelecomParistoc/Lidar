@@ -1,8 +1,14 @@
 #include "map.h"
 #include "utils.h"
+#include <math.h>
 #if TEST
 #include <stdio.h>
 #endif
+
+#define ROBOT_LENGTH 200 // in mm
+#define ROBOT_WIDTH 120 // in mm
+
+int corner_angle;
 
 int findNextValidIndex(slam_measure_t map[], int cur_index) {
   int i = 1;
@@ -49,4 +55,44 @@ void clean_data(slam_measure_t map[]) {
         break;
     }
   }
+}
+
+void init_robot(void) {
+  corner_angle = atan(ROBOT_LENGTH/ROBOT_WIDTH);
+}
+
+int get_robot_border(int angle) {
+  if (angle > 360) {
+    return -1;
+  }
+
+  // Robot is a rectangle
+
+  if ((angle < corner_angle) || (angle > (360 - corner_angle))) {
+    return (ROBOT_LENGTH / 2 * cos(angle));
+  } else if (angle < (180 - corner_angle)) {
+    return (ROBOT_WIDTH / 2 * sin(angle));
+  } else if (angle < (180 + corner_angle)) {
+    return -(ROBOT_LENGTH / 2 * cos(angle));
+  } else if (angle < (360 - corner_angle)) {
+    return -(ROBOT_WIDTH / 2 * sin(angle));
+  }
+
+  return -1;
+}
+
+int detect_collision(slam_measure_t *map) {
+  if (map == NULL) {
+    return -1;
+  }
+
+  for (int i = 0; i < MAP_SIZE; i++) {
+    if (map[i].valid) {
+      if (get_robot_border(i) + MARGIN < map[i].distance) {
+          return 1; // Imminent collision
+      }
+    }
+  }
+
+  return 0; // No collision
 }
