@@ -1,7 +1,7 @@
 #include "map.h"
 #include "utils.h"
 #include <math.h>
-#if TEST
+#ifdef TEST
 #include <stdio.h>
 #endif
 
@@ -29,7 +29,7 @@ void clean_data(slam_measure_t map[]) {
     invalid_data = false;
     nextIndex = findNextValidIndex(map, curIndex);
     if (ABS(map[nextIndex].distance - map[curIndex].distance) > DISCONTINUITY_THRESHOLD) {
-#if TEST
+#ifdef TEST
       printf("Discontinuity between %d and %d\n", curIndex, nextIndex);
 #endif
       check_nextIndex = nextIndex;
