@@ -95,38 +95,6 @@ uint16_t compute_checksum(xv11_packet_t *packet) {
   return checksum;
 }
 
-void clean_data(slam_measure_t map[]) {
-  bool invalid_data = false;
-  int nextIndex;
-  int curIndex = 0;
-  int check_curIndex;
-  int check_nextIndex;
-
-  while (true) {
-    nextIndex = findNextValidIndex(map, curIndex);
-    if (ABS(map[nextIndex].distance - map[curIndex].distance) > DISCONTINUITY_THRESHOLD) {
-      check_nextIndex = nextIndex;
-      for (int j = 0; j < CONTINUITY_CHECK_WINDOW; j++) {
-        check_curIndex = check_nextIndex;
-        check_nextIndex = findNextValidIndex(map, check_curIndex);
-        if (ABS(map[check_curIndex].distance - map[check_nextIndex].distance) > DISCONTINUITY_THRESHOLD) {
-          invalid_data = true;
-          break;
-        }
-      }
-
-      if (invalid_data) {
-        map[curIndex].valid = false;
-      }
-    }
-
-    if (curIndex < nextIndex)
-      curIndex = nextIndex;
-    else
-      break;
-  }
-}
-
 static THD_WORKING_AREA(waThread1, 128);
 static THD_FUNCTION(Thread1, arg) {
   (void)arg;

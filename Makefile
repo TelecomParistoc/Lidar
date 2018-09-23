@@ -220,3 +220,7 @@ gdb:
 
 openocd:
 	openocd -f board/st_nucleo_f4.cfg
+
+TEST_SRC_FILES = test/main.c test/test_map.c map.c
+test: $(TEST_SRC_FILES)
+	gcc $(TEST_SRC_FILES) -I. -o test/test -DTEST=1

@@ -9,5 +9,6 @@
 #define MIN_VALID_DATA_NB 220 /* in nb of samples */
 
 int findNextValidIndex(slam_measure_t map[], int cur_index);
+void clean_data(slam_measure_t map[]);
 
 #endif /* MAP_H */
