@@ -189,7 +189,7 @@ static THD_FUNCTION(Thread2, arg) {
           if (map[idx].valid)
             cnt++;
         }
-      //  swd_printf("valid data: %d\n", cnt);
+        swd_printf("valid data: %d\n", cnt);
         if (cnt > MIN_VALID_DATA_NB)
           mapValid = true;
       }
@@ -207,12 +207,15 @@ static THD_FUNCTION(Thread2, arg) {
       // Print map
       int curIndex = findNextValidIndex(map, MAP_SIZE - 1); // Find first valid index
       int nextIndex = findNextValidIndex(map, curIndex);
+      swd_printf("FOO");
       while (curIndex < nextIndex) {
-        swd_printf("%d %d\n", curIndex, map[curIndex].distance);
+        swd_printf("%d %d-", curIndex, map[curIndex].distance);
         curIndex = nextIndex;
         nextIndex =findNextValidIndex(map, curIndex);
       }
+      swd_printf("\n");
 #endif
+    //  print_map(map);
       // TODO: extract connex components
       mapComplete = false;
       mapValid = false;
@@ -258,7 +261,7 @@ int main(void) {
 	chThdCreateStatic(waThread2, sizeof(waThread2), NORMALPRIO, Thread2, NULL);
 
   while (true) {
-  //  palTogglePad(GPIOA, GPIOA_LED_GREEN);
+    palTogglePad(GPIOA, GPIOA_LED_GREEN);
     chThdSleepMilliseconds(200);
   }
 }

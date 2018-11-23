@@ -1,9 +1,9 @@
 #include "map.h"
 #include "utils.h"
 #include <math.h>
-#ifdef TEST
+#include <string.h>
 #include <stdio.h>
-#endif
+#include "log.h"
 
 #define ROBOT_LENGTH 200 // in mm
 #define ROBOT_WIDTH 120 // in mm
@@ -95,4 +95,44 @@ int detect_collision(slam_measure_t *map) {
   }
 
   return 0; // No collision
+}
+
+#if 0
+slam_measure_t *map_with_new_center(slam_measure_t *map, int center_dist, int center_angle) {
+  slam_measure_t *new_map = (slam_measure_t*)malloc(sizeof(slam_measure_t) * MAP_SIZE);
+  int new_angle;
+  int new_dist;
+
+  // Init map
+  for (int i = 0; i < MAP_SIZE; i++) {
+    new_map[i].valid = false;
+  }
+
+  for (int i = 0; i < MAP_SIZE; i++) {
+    if (map[i].valid) {
+      new_angle = atan(((center_dist * sin(center_angle)) - (map[i].distance * sin(i)) / ((center_dist * cos(center_angle)) - map[i].distance * cos(i)));
+      new_dist = ((center_dist * (cos(center_angle) + sin(center_angle)) - (map[i].distance * (cos(i) + sin(i)))) / (cos(new_angle) + sin(new_angle)));
+      new_map[new_angle].distance = new_dist;
+      new_map[new_angle].valid = true;
+    }
+  }
+}
+#endif
+
+void print_map(slam_measure_t *map) {
+  static char map_str[3600];
+  char tmp[10];
+  if (!map)
+    return;
+
+  memset(map_str, 0, 3600);
+  for (int i = 0; i < MAP_SIZE; i++) {
+    if (map[i].valid) {
+      sprintf(tmp, "%d %d ", i, map[i].distance);
+      strcat(map_str, tmp);
+      swd_printf("(%d)", strlen(map_str));
+    }
+  }
+
+  write(map_str, strlen(map_str));
 }
