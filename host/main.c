@@ -41,7 +41,7 @@ char file_name[7] = {0};
 timer_t timer_id = 0;
 const struct itimerspec timer_cfg = {
 	.it_value = {2, 0},
-	.it_interval = {1, 0}
+	.it_interval = {0, 500000000}
 };
 bool send_map = false;
 
